@@ -40,8 +40,17 @@ jobs:
     name: "🧪 Unit & Integration Tests"
     runs-on: ubuntu-latest
 
-    # Docker is required by Testcontainers for the MySQL integration tests.
-    # ubuntu-latest runners include Docker out of the box — no extra setup needed.
+    # Native GitHub Actions MySQL service container:
+    # Guaranteed to start and pass health check before tests run
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: university_test_db
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -prootpassword" --health-interval=10s --health-timeout=5s --health-retries=5
 
     steps:
       # 1. Check out source code
@@ -67,12 +76,15 @@ jobs:
       #                  TeacherServiceTest, AuthServiceTest, *ExtendedTest classes
       #    • Integration tests: SecurityIntegrationTest, AuthAndAdminIntegrationTest,
       #                         StudentCrudIntegrationTest, TeacherCrudIntegrationTest
-      #    Testcontainers will pull mysql:8.0.36 from Docker Hub and start it automatically.
+      #    Connects to the native MySQL service container
       - name: Run all tests
         run: mvn test --batch-mode --no-transfer-progress -DtrimStackTrace=false
         env:
-          # Testcontainers reuses the Docker socket provided by the runner
-          TESTCONTAINERS_RYUK_DISABLED: "false"
+          TEST_DB_URL: "jdbc:mysql://127.0.0.1:3306/university_test_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+          TEST_DB_DRIVER: "com.mysql.cj.jdbc.Driver"
+          TEST_DB_USERNAME: "root"
+          TEST_DB_PASSWORD: "rootpassword"
+          DOCKER_HOST: "unix:///var/run/docker.sock"
 
       # 5. Publish Surefire test reports as a workflow summary
       - name: Publish test results

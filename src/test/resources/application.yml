@@ -1,14 +1,17 @@
 spring:
   datasource:
-    url: jdbc:tc:mysql:8.0.36:///university_test_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
-    username: test
-    password: test
+    url: ${TEST_DB_URL:jdbc:tc:mysql:8.0.36:///university_test_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true}
+    driver-class-name: ${TEST_DB_DRIVER:org.testcontainers.jdbc.ContainerDatabaseDriver}
+    username: ${TEST_DB_USERNAME:test}
+    password: ${TEST_DB_PASSWORD:test}
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
 
   flyway:
     enabled: true
