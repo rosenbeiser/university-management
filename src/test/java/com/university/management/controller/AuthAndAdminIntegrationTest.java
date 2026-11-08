@@ -182,7 +182,7 @@ class AuthAndAdminIntegrationTest {
     @Order(14)
     @DisplayName("IT-Auth-14: OpenAPI JSON spec is publicly accessible")
     void openApiSpec_publiclyAccessible() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
+        mockMvc.perform(get("/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.info.title").exists());
     }

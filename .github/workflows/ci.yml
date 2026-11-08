@@ -67,9 +67,9 @@ jobs:
       #                  TeacherServiceTest, AuthServiceTest, *ExtendedTest classes
       #    • Integration tests: SecurityIntegrationTest, AuthAndAdminIntegrationTest,
       #                         StudentCrudIntegrationTest, TeacherCrudIntegrationTest
-      #    Testcontainers will pull mysql:8.4 from Docker Hub and start it automatically.
+      #    Testcontainers will pull mysql:8.0.36 from Docker Hub and start it automatically.
       - name: Run all tests
-        run: mvn test --batch-mode --no-transfer-progress
+        run: mvn test --batch-mode --no-transfer-progress -DtrimStackTrace=false
         env:
           # Testcontainers reuses the Docker socket provided by the runner
           TESTCONTAINERS_RYUK_DISABLED: "false"

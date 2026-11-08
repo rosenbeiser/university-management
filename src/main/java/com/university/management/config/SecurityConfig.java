@@ -45,7 +45,8 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api-docs/**",
-            "/api-docs.yaml"
+            "/api-docs.yaml",
+            "/v3/api-docs/**"
     };
 
     // ─── Security Filter Chain ────────────────────────────────────────────────
