@@ -157,22 +157,21 @@ jobs:
           name: university-management-jar
           path: target/
 
-      # Log in to Docker Hub using repository secrets
-      # Set DOCKERHUB_USERNAME and DOCKERHUB_TOKEN in:
-      #   GitHub → Your Repo → Settings → Secrets and variables → Actions
+      # Log in to Docker Hub only if credentials are provided in GitHub Secrets
       - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build and push with two tags: `latest` and the short commit SHA
+      # Build (and push only if credentials exist)
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
+          push: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/university-management:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/university-management:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME || 'local' }}/university-management:latest
+            ${{ secrets.DOCKERHUB_USERNAME || 'local' }}/university-management:${{ github.sha }}
 
