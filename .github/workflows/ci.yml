@@ -1,0 +1,166 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# University Management System — CI/CD Pipeline
+# ──────────────────────────────────────────────────────────────────────────────
+# Triggers:
+#   • Every push to `main` or `develop`
+#   • Every pull request targeting `main`
+#
+# Jobs:
+#   1. test   — Runs all unit + integration tests (Testcontainers needs Docker)
+#   2. build  — Builds the production JAR (skips tests, already run in job 1)
+#   3. docker — (Optional) Builds and pushes a Docker image on main branch merges
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+# Cancel any in-progress run for the same branch/PR to save runner minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  JAVA_DISTRIBUTION: "temurin"           # Eclipse Temurin (formerly AdoptOpenJDK)
+  MAVEN_OPTS: "-Xmx1g -XX:+UseG1GC"     # Keep Maven heap reasonable on free runners
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Job 1 — Test
+# ──────────────────────────────────────────────────────────────────────────────
+jobs:
+  test:
+    name: "🧪 Unit & Integration Tests"
+    runs-on: ubuntu-latest
+
+    # Docker is required by Testcontainers for the MySQL integration tests.
+    # ubuntu-latest runners include Docker out of the box — no extra setup needed.
+
+    steps:
+      # 1. Check out source code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up the correct Java version
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven           # Caches ~/.m2/repository between runs
+
+      # 3. (Optional) Print Java & Maven versions for traceability
+      - name: Show tool versions
+        run: |
+          java -version
+          mvn --version
+
+      # 4. Run the full test suite
+      #    • Unit tests: JwtServiceTest, AdminServiceTest, StudentServiceTest,
+      #                  TeacherServiceTest, AuthServiceTest, *ExtendedTest classes
+      #    • Integration tests: SecurityIntegrationTest, AuthAndAdminIntegrationTest,
+      #                         StudentCrudIntegrationTest, TeacherCrudIntegrationTest
+      #    Testcontainers will pull mysql:8.4 from Docker Hub and start it automatically.
+      - name: Run all tests
+        run: mvn test --batch-mode --no-transfer-progress
+        env:
+          # Testcontainers reuses the Docker socket provided by the runner
+          TESTCONTAINERS_RYUK_DISABLED: "false"
+
+      # 5. Publish Surefire test reports as a workflow summary
+      - name: Publish test results
+        if: always()                     # Run even when tests fail
+        uses: dorny/test-reporter@v1
+        with:
+          name: Maven Test Results
+          path: target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: false           # Don't fail the report step itself
+
+      # 6. Upload Surefire XML reports as a downloadable artifact
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 14
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 2 — Build
+  # ──────────────────────────────────────────────────────────────────────────────
+  build:
+    name: "🔨 Build Production JAR"
+    runs-on: ubuntu-latest
+    needs: test                          # Only run after tests pass
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      # Build the fat JAR (tests already passed in the `test` job)
+      - name: Build JAR (skip tests)
+        run: mvn package -DskipTests --batch-mode --no-transfer-progress
+
+      # Upload the JAR so other jobs / workflows can download it
+      - name: Upload application JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: university-management-jar
+          path: target/university-management-*.jar
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Job 3 — Docker (runs only on pushes to `main`)
+  # ──────────────────────────────────────────────────────────────────────────────
+  docker:
+    name: "🐳 Build & Push Docker Image"
+    runs-on: ubuntu-latest
+    needs: build                         # Depends on a successful build
+    # Only build Docker image when merging into main (not on PRs or develop)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download the JAR produced in the `build` job
+      - name: Download application JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: university-management-jar
+          path: target/
+
+      # Log in to Docker Hub using repository secrets
+      # Set DOCKERHUB_USERNAME and DOCKERHUB_TOKEN in:
+      #   GitHub → Your Repo → Settings → Secrets and variables → Actions
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push with two tags: `latest` and the short commit SHA
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/university-management:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/university-management:${{ github.sha }}
+
