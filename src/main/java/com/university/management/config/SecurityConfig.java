@@ -2,6 +2,7 @@ package com.university.management.config;
 
 import com.university.management.security.JwtAuthFilter;
 import com.university.management.security.UserDetailsServiceImpl;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -74,6 +75,13 @@ public class SecurityConfig {
                 .requestMatchers(PUBLIC_PATHS).permitAll()
                 // All other paths require authentication
                 .anyRequest().authenticated()
+            )
+
+            // Return 401 Unauthorized (instead of default 403 Forbidden) for unauthenticated requests
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) ->
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+                )
             )
 
             // JWT filter before Spring Security's UsernamePasswordAuthenticationFilter
